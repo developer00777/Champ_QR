@@ -1,0 +1,142 @@
+version: "3.9"
+
+services:
+
+  # ── MongoDB ────────────────────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: champqr-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-champqr}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-champqr_secret}
+      MONGO_INITDB_DATABASE: champqr
+    volumes:
+      - mongodb_data:/data/db
+      - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro
+    ports:
+      - "27017:27017"
+    networks:
+      - champqr-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: champqr-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_secret}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - champqr-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_secret}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── Backend API ────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: champqr-backend
+    restart: unless-stopped
+    env_file: .env.docker
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-champqr}:${MONGO_INITDB_ROOT_PASSWORD:-champqr_secret}@mongodb:27017/champqr?authSource=admin
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379
+      FILE_BASE_URL: ${FILE_BASE_URL:-http://localhost/files}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "3001:3001"
+    networks:
+      - champqr-net
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Worker (BullMQ processing pipeline) ───────────────────────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: champqr-worker
+    restart: unless-stopped
+    command: ["node", "dist/workers/index.js"]
+    env_file: .env.docker
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-champqr}:${MONGO_INITDB_ROOT_PASSWORD:-champqr_secret}@mongodb:27017/champqr?authSource=admin
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379
+      FILE_BASE_URL: ${FILE_BASE_URL:-http://localhost/files}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - champqr-net
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
+  # ── Frontend (nginx + Vite build) ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+        VITE_APP_NAME: ChampQR
+    container_name: champqr-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - champqr-net
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  uploads_data:
+    driver: local
+
+networks:
+  champqr-net:
+    driver: bridge
