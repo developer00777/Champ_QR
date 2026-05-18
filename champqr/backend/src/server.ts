@@ -14,6 +14,9 @@ import authRoutes from './routes/auth'
 import cardRoutes from './routes/cards'
 import analyticsRoutes from './routes/analytics'
 import fileRoutes from './routes/files'
+import adminRoutes from './routes/admin'
+import { seedAdmin } from './lib/seedAdmin'
+import { registerWsClient } from './lib/wsEmitter'
 
 const app = Fastify({ logger: { level: process.env.NODE_ENV === 'production' ? 'warn' : 'info' } })
 
@@ -46,8 +49,8 @@ app.register(rateLimit, {
 
 app.register(multipart, {
   limits: {
-    fileSize: 200 * 1024 * 1024,  // 200 MB
-    files: 1,
+    fileSize: 200 * 1024 * 1024,  // 200 MB per file
+    files: 2,                      // video + optional audio
   },
 })
 
@@ -62,13 +65,18 @@ if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
 app.register(authRoutes, { prefix: '/api/auth' })
 app.register(cardRoutes, { prefix: '/api/cards' })
 app.register(analyticsRoutes, { prefix: '/api/analytics' })
+app.register(adminRoutes, { prefix: '/api/admin' })
 app.register(fileRoutes, { prefix: '/files' })
 
 // WebSocket endpoint for card processing status
 app.register(async (wsApp) => {
-  wsApp.get('/socket.io', { websocket: true }, (socket) => {
-    socket.on('message', () => {})
-    socket.on('close', () => {})
+  wsApp.get('/ws', { websocket: true }, (socket) => {
+    const unregister = registerWsClient((payload) => {
+      if (socket.readyState === 1) {
+        socket.send(JSON.stringify(payload))
+      }
+    })
+    socket.on('close', unregister)
   })
 })
 
@@ -81,6 +89,7 @@ const start = async () => {
   const MONGODB_URI = process.env.MONGODB_URI ?? 'mongodb://localhost:27017/champqr'
   await mongoose.connect(MONGODB_URI)
   app.log.info('MongoDB connected')
+  await seedAdmin()
 
   const port = Number(process.env.PORT ?? 3001)
   await app.listen({ port, host: '0.0.0.0' })

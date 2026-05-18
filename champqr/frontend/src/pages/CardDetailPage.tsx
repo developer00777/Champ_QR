@@ -22,7 +22,7 @@ const PIE_COLORS = ['#E8003D', '#F59E0B', '#22C55E', '#3B82F6', '#8B5CF6']
 export default function CardDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const socket = useSocket()
+  const ws = useSocket()
   const [card, setCard] = useState<Card | null>(null)
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
   const [loading, setLoading] = useState(true)
@@ -44,13 +44,12 @@ export default function CardDetailPage() {
   useEffect(() => { fetchAll() }, [id])
 
   useEffect(() => {
-    if (!socket) return
     const handler = (payload: { cardId: string; status: Card['status'] }) => {
-      if (payload.cardId === id) setCard((c) => c ? { ...c, status: payload.status } : c)
+      if (payload.cardId === id) setCard((c) => c ? { ...c, status: payload.status as Card['status'] } : c)
     }
-    socket.on('card:status', handler)
-    return () => { socket.off('card:status', handler) }
-  }, [socket, id])
+    ws.on('card:status', handler)
+    return () => { ws.off('card:status', handler) }
+  }, [id])
 
   const handleDelete = async () => {
     if (!confirm('Delete this card? The QR code will stop working immediately.')) return

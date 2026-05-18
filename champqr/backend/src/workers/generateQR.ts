@@ -33,7 +33,7 @@ export async function generateQR(slug: string): Promise<{ qrPngUrl: string; qrSv
   fs.writeFileSync(svgPath, svgString)
 
   // Composite Champions Ranch logo onto center of QR
-  const logoPath = process.env.LOGO_PATH ?? path.join(__dirname, '../assets/champions-ranch-logo.png')
+  const logoPath = process.env.LOGO_PATH ?? path.join(__dirname, '../assets/qr-logo.jpeg')
   let finalBuffer = qrBuffer
 
   if (fs.existsSync(logoPath)) {

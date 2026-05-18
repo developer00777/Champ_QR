@@ -15,42 +15,39 @@ export function startCardWorker() {
   const worker = new Worker(
     'card-processing',
     async (job) => {
-      const { cardId, videoPath } = job.data
+      const { cardId, videoPath, audioPath } = job.data
+      const t0 = Date.now()
       console.log(`[worker] Processing card ${cardId}`)
 
       const card = await Card.findById(cardId)
       if (!card) throw new Error(`Card ${cardId} not found`)
 
       try {
-        // Step 1: Transcode
-        await job.updateProgress(10)
-        const { videoUrl, thumbnailUrl } = await transcodeVideo(videoPath, card.slug)
-        await Card.findByIdAndUpdate(cardId, { videoUrl, thumbnailUrl })
+        await job.updateProgress(5)
+
+        // Step 1+2: Transcode video AND generate QR in parallel — saves ~15-30s
+        const [{ videoUrl, thumbnailUrl }, { qrPngUrl, qrSvgPath }] = await Promise.all([
+          transcodeVideo(videoPath, card.slug, audioPath),
+          generateQR(card.slug),
+        ])
+
+        await Card.findByIdAndUpdate(cardId, { videoUrl, thumbnailUrl, qrImageUrl: qrPngUrl })
         emitCardStatus(cardId, 'processing:transcoded')
+        await job.updateProgress(50)
 
-        // Step 2: Generate QR
-        await job.updateProgress(35)
-        const { qrPngUrl, qrSvgPath } = await generateQR(card.slug)
-        await Card.findByIdAndUpdate(cardId, { qrImageUrl: qrPngUrl })
-        emitCardStatus(cardId, 'processing:qr')
+        // Step 3+4: Print pack AND MindAR compile in parallel — saves ~5s
+        const [printPackUrl, targetFileUrl] = await Promise.all([
+          buildPrintPack(card.slug, qrPngUrl, qrSvgPath, card.ownerName),
+          compileMindARTarget(qrPngUrl, card.slug),
+        ])
 
-        // Step 3: Print pack
-        await job.updateProgress(55)
-        const printPackUrl = await buildPrintPack(card.slug, qrPngUrl, qrSvgPath, card.ownerName)
-        await Card.findByIdAndUpdate(cardId, { printPackUrl })
-        emitCardStatus(cardId, 'processing:printpack')
-
-        // Step 4: Compile MindAR target
-        await job.updateProgress(75)
-        const targetFileUrl = await compileMindARTarget(qrPngUrl, card.slug)
-        await Card.findByIdAndUpdate(cardId, { targetFileUrl })
+        await Card.findByIdAndUpdate(cardId, { printPackUrl, targetFileUrl })
         emitCardStatus(cardId, 'processing:ar')
-
-        // Step 5: Mark ready
         await job.updateProgress(100)
+
         await Card.findByIdAndUpdate(cardId, { status: 'ready', errorMsg: '' })
         emitCardStatus(cardId, 'ready')
-        console.log(`[worker] Card ${cardId} ready`)
+        console.log(`[worker] Card ${cardId} ready in ${((Date.now() - t0) / 1000).toFixed(1)}s`)
 
       } catch (err: any) {
         console.error(`[worker] Card ${cardId} failed:`, err.message)

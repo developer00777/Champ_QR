@@ -11,6 +11,7 @@ export interface ICard extends Document {
   website: string
   socialLinks: { linkedin?: string; instagram?: string; twitter?: string }
   videoStorageId: string
+  audioStorageId: string
   videoUrl: string
   thumbnailUrl: string
   qrImageUrl: string
@@ -37,6 +38,7 @@ const CardSchema = new Schema<ICard>(
       twitter:   { type: String, default: '' },
     },
     videoStorageId: { type: String, default: '' },
+    audioStorageId: { type: String, default: '' },
     videoUrl:       { type: String, default: '' },
     thumbnailUrl:   { type: String, default: '' },
     qrImageUrl:     { type: String, default: '' },

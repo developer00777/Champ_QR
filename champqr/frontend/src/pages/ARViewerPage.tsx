@@ -21,6 +21,7 @@ export default function ARViewerPage() {
   const [state, setState] = useState<ViewerState>('loading')
   const [muted, setMuted] = useState(true)
   const [showOverlay, setShowOverlay] = useState(true)
+  const [showSoundHint, setShowSoundHint] = useState(false)
   const [noDetectionTimer, setNoDetectionTimer] = useState(false)
 
   const cameraVideoRef = useRef<HTMLVideoElement>(null)
@@ -54,11 +55,13 @@ export default function ARViewerPage() {
     load()
   }, [slug, logScan])
 
-  // Hide info overlay after 3s once playing
+  // Hide info overlay after 3s once playing; show sound hint once
   useEffect(() => {
     if (state !== 'playing') return
-    const t = setTimeout(() => setShowOverlay(false), 3000)
-    return () => clearTimeout(t)
+    const t1 = setTimeout(() => setShowOverlay(false), 3000)
+    setShowSoundHint(true)
+    const t2 = setTimeout(() => setShowSoundHint(false), 5000)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [state])
 
   function checkBrowserSupport() {
@@ -163,6 +166,7 @@ export default function ARViewerPage() {
     if (!v) return
     v.muted = !muted
     setMuted(!muted)
+    if (muted) setShowSoundHint(false)
   }
 
   if (state === 'loading') return <LoadingScreen />
@@ -275,6 +279,24 @@ export default function ARViewerPage() {
               {noDetectionTimer && (
                 <p className="text-xs text-text-secondary mt-1">Make sure the QR is well-lit and fully visible</p>
               )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Sound hint — appears for 5s when video starts */}
+      <AnimatePresence>
+        {showSoundHint && muted && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="absolute top-16 left-1/2 -translate-x-1/2 pointer-events-none"
+            style={{ zIndex: 25 }}
+          >
+            <div className="bg-black/60 backdrop-blur-sm rounded-full px-4 py-1.5 flex items-center gap-2">
+              <VolumeX className="w-3.5 h-3.5 text-white/70" />
+              <span className="text-xs text-white/80">Tap 🔊 for sound</span>
             </div>
           </motion.div>
         )}

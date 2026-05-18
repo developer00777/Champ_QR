@@ -12,20 +12,28 @@ try {
 
 const uploadsDir = path.join(__dirname, '../../uploads')
 
-export async function transcodeVideo(inputPath: string, slug: string): Promise<{ videoUrl: string; thumbnailUrl: string }> {
+export async function transcodeVideo(inputPath: string, slug: string, audioPath?: string): Promise<{ videoUrl: string; thumbnailUrl: string }> {
   const outDir = path.join(uploadsDir, 'videos', 'processed')
   fs.mkdirSync(outDir, { recursive: true })
 
   const videoFilename = `${slug}.mp4`
   const thumbFilename = `${slug}-thumb.jpg`
   const videoOut = path.join(outDir, videoFilename)
-  const thumbOut = path.join(outDir, thumbFilename)
 
   const localInput = inputPath.replace(/.*\/files\//, '')
   const absoluteInput = path.join(uploadsDir, localInput)
 
   await new Promise<void>((resolve, reject) => {
-    ffmpeg(absoluteInput)
+    let cmd = ffmpeg(absoluteInput)
+
+    if (audioPath) {
+      const localAudio = audioPath.replace(/.*\/files\//, '')
+      const absoluteAudio = path.join(uploadsDir, localAudio)
+      cmd = cmd.input(absoluteAudio)
+        .outputOptions(['-map 0:v:0', '-map 1:a:0', '-shortest'])
+    }
+
+    cmd
       .videoCodec('libx264')
       .audioCodec('aac')
       .videoBitrate('1200k')
@@ -38,16 +46,23 @@ export async function transcodeVideo(inputPath: string, slug: string): Promise<{
         '-pix_fmt yuv420p',
       ])
       .output(videoOut)
-      .on('end', resolve)
+      .on('end', () => resolve())
       .on('error', reject)
       .run()
   })
+
+  // Delete raw inputs now that the processed file exists
+  try { fs.unlinkSync(absoluteInput) } catch {}
+  if (audioPath) {
+    const localAudio = audioPath.replace(/.*\/files\//, '')
+    try { fs.unlinkSync(path.join(uploadsDir, localAudio)) } catch {}
+  }
 
   // Extract thumbnail at 0s
   await new Promise<void>((resolve, reject) => {
     ffmpeg(videoOut)
       .screenshots({ timestamps: ['00:00:00.000'], filename: thumbFilename, folder: outDir, size: '640x360' })
-      .on('end', resolve)
+      .on('end', () => resolve())
       .on('error', reject)
   })
 

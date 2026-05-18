@@ -13,8 +13,8 @@ function getRedisConnection() {
 export const cardQueue = new Queue('card-processing', { connection: getRedisConnection() })
 export const queueEvents = new QueueEvents('card-processing', { connection: getRedisConnection() })
 
-export async function addCardJob(cardId: string, videoPath: string) {
-  return cardQueue.add('process-card', { cardId, videoPath }, {
+export async function addCardJob(cardId: string, videoPath: string, audioPath?: string) {
+  return cardQueue.add('process-card', { cardId, videoPath, audioPath }, {
     attempts: 3,
     backoff: { type: 'exponential', delay: 5000 },
     removeOnComplete: { count: 100 },

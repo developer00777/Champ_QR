@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+// Link kept for logo navigation
 import { motion } from 'framer-motion'
 import { QrCode } from 'lucide-react'
 import api from '@/lib/api'
@@ -83,10 +84,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-sm text-text-secondary mt-6">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-accent hover:text-accent-hover">
-            Sign up
-          </Link>
+          Need access? Contact your administrator.
         </p>
       </motion.div>
     </div>

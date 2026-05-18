@@ -13,7 +13,7 @@ export default function DashboardPage() {
   const { user } = useAuthStore()
   const [cards, setCards] = useState<Card[]>([])
   const [loading, setLoading] = useState(true)
-  const socket = useSocket()
+  const ws = useSocket()
 
   const fetchCards = async () => {
     try {
@@ -27,15 +27,14 @@ export default function DashboardPage() {
   useEffect(() => { fetchCards() }, [])
 
   useEffect(() => {
-    if (!socket) return
     const handler = (payload: { cardId: string; status: Card['status'] }) => {
       setCards((prev) =>
-        prev.map((c) => c._id === payload.cardId ? { ...c, status: payload.status } : c)
+        prev.map((c) => c._id === payload.cardId ? { ...c, status: payload.status as Card['status'] } : c)
       )
     }
-    socket.on('card:status', handler)
-    return () => { socket.off('card:status', handler) }
-  }, [socket])
+    ws.on('card:status', handler)
+    return () => { ws.off('card:status', handler) }
+  }, [])
 
   return (
     <DashboardLayout>

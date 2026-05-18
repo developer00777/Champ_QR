@@ -5,6 +5,8 @@ export interface IUser extends Document {
   passwordHash: string
   name: string
   plan: 'free' | 'pro' | 'business'
+  role: 'admin' | 'user'
+  isActive: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -15,10 +17,11 @@ const UserSchema = new Schema<IUser>(
     passwordHash: { type: String, required: true },
     name:         { type: String, required: true, trim: true },
     plan:         { type: String, enum: ['free', 'pro', 'business'], default: 'free' },
+    role:         { type: String, enum: ['admin', 'user'], default: 'user' },
+    isActive:     { type: Boolean, default: true },
   },
   { timestamps: true }
 )
 
-UserSchema.index({ email: 1 })
 
 export default mongoose.model<IUser>('User', UserSchema)

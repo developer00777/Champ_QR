@@ -3,7 +3,7 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY . .
 
@@ -29,7 +29,7 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Health check endpoint (nginx returns 200 for /health via config)
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s \
-  CMD wget -qO- http://localhost:80/health || exit 1
+  CMD wget -qO- http://127.0.0.1:80/health || exit 1
 
 EXPOSE 80
 

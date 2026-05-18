@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, Film, CheckCircle2, AlertCircle, X } from 'lucide-react'
+import { Upload, Film, CheckCircle2, AlertCircle, X, Music } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import Spinner from '@/components/ui/Spinner'
 import api from '@/lib/api'
@@ -29,11 +29,13 @@ export default function CreateCardPage() {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [video, setVideo] = useState<File | null>(null)
   const [videoError, setVideoError] = useState('')
+  const [audio, setAudio] = useState<File | null>(null)
+  const [audioError, setAudioError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [error, setError] = useState('')
 
-  const onDrop = useCallback((accepted: File[]) => {
+  const onDropVideo = useCallback((accepted: File[]) => {
     const file = accepted[0]
     if (!file) return
     setVideoError('')
@@ -44,9 +46,26 @@ export default function CreateCardPage() {
     setVideo(file)
   }, [])
 
+  const onDropAudio = useCallback((accepted: File[]) => {
+    const file = accepted[0]
+    if (!file) return
+    setAudioError('')
+    if (file.size > 50 * 1024 * 1024) {
+      setAudioError('Audio file is too large. Maximum size is 50 MB.')
+      return
+    }
+    setAudio(file)
+  }, [])
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
+    onDrop: onDropVideo,
     accept: { 'video/mp4': ['.mp4'], 'video/quicktime': ['.mov'], 'video/webm': ['.webm'] },
+    maxFiles: 1,
+  })
+
+  const { getRootProps: getAudioRootProps, getInputProps: getAudioInputProps, isDragActive: isAudioDragActive } = useDropzone({
+    onDrop: onDropAudio,
+    accept: { 'audio/mpeg': ['.mp3'], 'audio/wav': ['.wav'], 'audio/mp4': ['.m4a'], 'audio/aac': ['.aac'] },
     maxFiles: 1,
   })
 
@@ -66,6 +85,7 @@ export default function CreateCardPage() {
     const fd = new FormData()
     Object.entries(form).forEach(([k, v]) => { if (v) fd.append(k, v) })
     fd.append('video', video)
+    if (audio) fd.append('audio', audio)
 
     try {
       const { data } = await api.post('/cards', fd, {
@@ -121,6 +141,40 @@ export default function CreateCardPage() {
               </div>
             )}
             {videoError && <p className="text-xs text-status-error mt-2">{videoError}</p>}
+          </div>
+
+          {/* Audio track (optional) */}
+          <div className="panel p-6">
+            <h2 className="font-semibold mb-1">Background Audio <span className="text-text-secondary font-normal text-sm">(optional)</span></h2>
+            <p className="text-xs text-text-secondary mb-4">Upload a music track to replace or add audio to your video. MP3, WAV, M4A · Max 50 MB</p>
+
+            {audio ? (
+              <div className="flex items-center gap-3 p-4 bg-bg-surface rounded border border-accent/30">
+                <Music className="w-5 h-5 text-accent shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{audio.name}</p>
+                  <p className="text-xs text-text-secondary">{(audio.size / 1024 / 1024).toFixed(1)} MB</p>
+                </div>
+                <button type="button" onClick={() => setAudio(null)} className="text-text-secondary hover:text-text-primary">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div
+                {...getAudioRootProps()}
+                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                  isAudioDragActive ? 'border-accent bg-accent/5' : 'border-border hover:border-border-hover'
+                }`}
+              >
+                <input {...getAudioInputProps()} />
+                <Music className="w-7 h-7 mx-auto mb-2 text-text-secondary" />
+                <p className="text-sm font-medium mb-1">
+                  {isAudioDragActive ? 'Drop audio here' : 'Drag & drop an audio file'}
+                </p>
+                <p className="text-xs text-text-secondary">or click to browse</p>
+              </div>
+            )}
+            {audioError && <p className="text-xs text-status-error mt-2">{audioError}</p>}
           </div>
 
           {/* Profile details */}

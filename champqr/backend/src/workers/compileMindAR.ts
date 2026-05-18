@@ -1,9 +1,8 @@
-import { execFile } from 'child_process'
+import '@tensorflow/tfjs-backend-cpu'
 import path from 'path'
 import fs from 'fs'
-import { promisify } from 'util'
+import { loadImage } from 'canvas'
 
-const execFileAsync = promisify(execFile)
 const uploadsDir = path.join(__dirname, '../../uploads')
 
 export async function compileMindARTarget(qrPngUrl: string, slug: string): Promise<string> {
@@ -20,20 +19,28 @@ export async function compileMindARTarget(qrPngUrl: string, slug: string): Promi
   const mindFilename = `${slug}.mind`
   const mindOutPath = path.join(outDir, mindFilename)
 
-  // Use the MindAR image compiler CLI
-  // Installed via: node_modules/.bin/mindar-image-targets-compiler
-  const compilerPath = path.join(__dirname, '../../../node_modules/.bin/mindar-image-targets-compiler')
+  // OfflineCompiler is the only server-side (Node.js) compiler in mind-ar.
+  // It calls createProcessCanvas(img) then ctx.drawImage(img) internally,
+  // so `img` must be a canvas Image (from the `canvas` package), not ImageData.
+  const { OfflineCompiler } = await import('mind-ar/src/image-target/offline-compiler.js' as any)
 
-  try {
-    await execFileAsync('node', [
-      compilerPath,
-      '--input', qrAbsPath,
-      '--output', mindOutPath,
-    ], { timeout: 60000 })
-  } catch {
-    // Fallback: try direct node compilation using mind-ar internals
-    await compileFallback(qrAbsPath, mindOutPath)
-  }
+  // Downscale to 512px for MindAR feature extraction — same tracking quality, much faster compile
+  const { createCanvas } = await import('canvas')
+  const srcImg = await loadImage(qrAbsPath)
+  const size = 256
+  const canvas = createCanvas(size, size)
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(srcImg as any, 0, 0, size, size)
+  const img = canvas
+
+  const compiler = new OfflineCompiler()
+  await compiler.compileImageTargets([img], (progress: number) => {
+    process.stdout.write(`\r[mind-ar] compiling: ${progress.toFixed(1)}%`)
+  })
+  process.stdout.write('\n')
+
+  const buffer = compiler.exportData()
+  fs.writeFileSync(mindOutPath, Buffer.from(buffer))
 
   if (!fs.existsSync(mindOutPath)) {
     throw new Error('MindAR compilation produced no output file')
@@ -41,21 +48,4 @@ export async function compileMindARTarget(qrPngUrl: string, slug: string): Promi
 
   const base = process.env.FILE_BASE_URL ?? 'http://localhost:3001/files'
   return `${base}/mind/${mindFilename}`
-}
-
-async function compileFallback(imagePath: string, outputPath: string) {
-  const { createTargetFromImages } = await import('mind-ar/dist/mindar-image.prod.js' as any)
-    .catch(() => { throw new Error('mind-ar not available for server-side compilation') })
-
-  const sharp = (await import('sharp')).default
-  const imgBuffer = fs.readFileSync(imagePath)
-  const { data, info } = await sharp(imgBuffer).raw().toBuffer({ resolveWithObject: true })
-
-  const result = await createTargetFromImages([{
-    data: new Uint8ClampedArray(data),
-    width: info.width,
-    height: info.height,
-  }])
-
-  fs.writeFileSync(outputPath, Buffer.from(result))
 }

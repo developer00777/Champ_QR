@@ -1,13 +1,13 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LayoutGrid, Plus, LogOut, QrCode } from 'lucide-react'
+import { LayoutGrid, Plus, LogOut, QrCode, Users, BarChart3, ShieldCheck } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 import api from '@/lib/api'
 
 interface Props { children: React.ReactNode }
 
 export default function DashboardLayout({ children }: Props) {
-  const { user, clearAuth } = useAuthStore()
+  const { user, isAdmin, clearAuth } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -20,6 +20,10 @@ export default function DashboardLayout({ children }: Props) {
   const navLinks = [
     { to: '/dashboard', icon: LayoutGrid, label: 'My Cards' },
     { to: '/dashboard/create', icon: Plus, label: 'New Card' },
+    ...(isAdmin ? [
+      { to: '/admin/users', icon: Users, label: 'Users' },
+      { to: '/admin/stats', icon: BarChart3, label: 'Platform Stats' },
+    ] : []),
   ]
 
   return (
@@ -55,7 +59,10 @@ export default function DashboardLayout({ children }: Props) {
 
         <div className="p-3 border-t border-border">
           <div className="px-3 py-2 mb-1">
-            <p className="text-xs font-medium text-text-primary truncate">{user?.name}</p>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <p className="text-xs font-medium text-text-primary truncate">{user?.name}</p>
+              {isAdmin && <ShieldCheck className="w-3 h-3 text-accent shrink-0" aria-label="Admin" />}
+            </div>
             <p className="text-xs text-text-secondary truncate">{user?.email}</p>
           </div>
           <button

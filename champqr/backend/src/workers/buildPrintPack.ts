@@ -38,6 +38,11 @@ export async function buildPrintPack(
     { path: readmePath,      name: 'README.txt' },
   ])
 
+  // 5) Clean up intermediates — zip contains copies of everything
+  for (const p of [cardMockupPath, stickerPath, readmePath, qrSvgPath]) {
+    try { fs.unlinkSync(p) } catch {}
+  }
+
   const base = process.env.FILE_BASE_URL ?? 'http://localhost:3001/files'
   return `${base}/printpacks/${slug}-print-pack.zip`
 }

@@ -17,7 +17,7 @@ export default async function cardRoutes(app: FastifyInstance) {
 
     const fields: Record<string, string> = {}
     let videoPath = ''
-    let originalFilename = ''
+    let audioPath = ''
 
     for await (const part of parts) {
       if (part.type === 'field') {
@@ -26,7 +26,10 @@ export default async function cardRoutes(app: FastifyInstance) {
         const ext = path.extname(part.filename || '.mp4')
         const filename = `videos/raw/${nanoid(12)}${ext}`
         videoPath = await saveStream(part.file, filename)
-        originalFilename = part.filename
+      } else if (part.type === 'file' && part.fieldname === 'audio') {
+        const ext = path.extname(part.filename || '.mp3')
+        const filename = `audio/raw/${nanoid(12)}${ext}`
+        audioPath = await saveStream(part.file, filename)
       }
     }
 
@@ -48,11 +51,12 @@ export default async function cardRoutes(app: FastifyInstance) {
         twitter: fields.twitter ?? '',
       },
       videoStorageId: videoPath,
+      audioStorageId: audioPath,
       status: 'processing',
     })
 
     // Queue processing pipeline
-    await addCardJob(String(card._id), videoPath)
+    await addCardJob(String(card._id), videoPath, audioPath || undefined)
 
     return reply.code(202).send({ cardId: card._id, slug, status: 'processing' })
   })
@@ -151,7 +155,10 @@ export default async function cardRoutes(app: FastifyInstance) {
     const filename = card.qrImageUrl.replace(/.*\/files\//, '')
     const filePath = getLocalPath(filename)
     if (!fs.existsSync(filePath)) return reply.code(404).send({ message: 'File not found.' })
-    return reply.header('Content-Disposition', `attachment; filename="champqr-${card.slug}.png"`).sendFile(filename, getLocalPath(''))
+    return reply
+      .header('Content-Type', 'image/png')
+      .header('Content-Disposition', `attachment; filename="champqr-${card.slug}.png"`)
+      .send(fs.readFileSync(filePath))
   })
 
   // Download QR SVG

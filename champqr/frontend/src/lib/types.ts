@@ -3,6 +3,19 @@ export interface User {
   email: string
   name: string
   plan: 'free' | 'pro' | 'business'
+  role: 'admin' | 'user'
+  isActive: boolean
+  createdAt: string
+}
+
+export interface AdminUser {
+  _id: string
+  email: string
+  name: string
+  plan: 'free' | 'pro' | 'business'
+  role: 'admin' | 'user'
+  isActive: boolean
+  cardCount: number
   createdAt: string
 }
 

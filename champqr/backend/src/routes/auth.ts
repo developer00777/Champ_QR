@@ -15,22 +15,33 @@ const COOKIE_OPTS = {
 export default async function authRoutes(app: FastifyInstance) {
   // Register
   app.post('/register', {
-    config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
   }, async (req, reply) => {
     const { name, email, password } = req.body as any
-    if (!name || !email || !password) return reply.code(400).send({ message: 'All fields are required.' })
-    if (password.length < 8) return reply.code(400).send({ message: 'Password must be at least 8 characters.' })
+    if (!name?.trim() || !email?.trim() || !password) {
+      return reply.code(400).send({ message: 'Name, email and password are required.' })
+    }
+    if (password.length < 8) {
+      return reply.code(400).send({ message: 'Password must be at least 8 characters.' })
+    }
 
     const existing = await User.findOne({ email: email.toLowerCase() })
     if (existing) return reply.code(409).send({ message: 'An account with this email already exists.' })
 
     const passwordHash = await bcrypt.hash(password, 12)
-    const user = await User.create({ name: name.trim(), email: email.toLowerCase(), passwordHash })
+    const user = await User.create({
+      name: name.trim(),
+      email: email.toLowerCase(),
+      passwordHash,
+      plan: 'free',
+      role: 'user',
+      isActive: true,
+    })
 
     const token = signToken({ userId: String(user._id) })
     reply.setCookie('champqr_token', token, COOKIE_OPTS)
     return reply.code(201).send({
-      user: { _id: user._id, email: user.email, name: user.name, plan: user.plan },
+      user: { _id: user._id, email: user.email, name: user.name, plan: user.plan, role: user.role },
     })
   })
 
@@ -49,7 +60,7 @@ export default async function authRoutes(app: FastifyInstance) {
 
     const token = signToken({ userId: String(user._id) })
     reply.setCookie('champqr_token', token, COOKIE_OPTS)
-    return { user: { _id: user._id, email: user.email, name: user.name, plan: user.plan } }
+    return { user: { _id: user._id, email: user.email, name: user.name, plan: user.plan, role: user.role } }
   })
 
   // Logout
@@ -61,6 +72,6 @@ export default async function authRoutes(app: FastifyInstance) {
   // Me
   app.get('/me', { preHandler: requireAuth }, async (req) => {
     const user = (req as any).user
-    return { user: { _id: user._id, email: user.email, name: user.name, plan: user.plan } }
+    return { user: { _id: user._id, email: user.email, name: user.name, plan: user.plan, role: user.role } }
   })
 }
