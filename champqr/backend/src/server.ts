@@ -12,11 +12,14 @@ import fs from 'fs'
 
 import authRoutes from './routes/auth'
 import cardRoutes from './routes/cards'
+import campaignRoutes from './routes/campaigns'
 import analyticsRoutes from './routes/analytics'
 import fileRoutes from './routes/files'
 import adminRoutes from './routes/admin'
 import { seedAdmin } from './lib/seedAdmin'
 import { registerWsClient } from './lib/wsEmitter'
+import { startCardWorker } from './workers/cardWorker'
+import { startCampaignWorker } from './workers/campaignWorker'
 
 const app = Fastify({ logger: { level: process.env.NODE_ENV === 'production' ? 'warn' : 'info' } })
 
@@ -64,6 +67,7 @@ if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
 
 app.register(authRoutes, { prefix: '/api/auth' })
 app.register(cardRoutes, { prefix: '/api/cards' })
+app.register(campaignRoutes, { prefix: '/api/campaigns' })
 app.register(analyticsRoutes, { prefix: '/api/analytics' })
 app.register(adminRoutes, { prefix: '/api/admin' })
 app.register(fileRoutes, { prefix: '/files' })
@@ -90,6 +94,11 @@ const start = async () => {
   await mongoose.connect(MONGODB_URI)
   app.log.info('MongoDB connected')
   await seedAdmin()
+
+  // Workers must run in-process (shares /app/uploads with the server on Railway)
+  startCardWorker()
+  startCampaignWorker()
+  app.log.info('Processing workers started')
 
   const port = Number(process.env.PORT ?? 3001)
   await app.listen({ port, host: '0.0.0.0' })
